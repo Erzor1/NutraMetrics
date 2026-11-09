@@ -259,6 +259,9 @@ def load_catboost_model() -> CatBoostRegressor:
 
 @st.cache_data(show_spinner=False)
 def query_sqlite(sql_query: str) -> pd.DataFrame:
+    if not DB_PATH.exists():
+        from src.database import build_database
+        build_database()
     with sqlite3.connect(str(DB_PATH)) as conn:
         return pd.read_sql_query(sql_query, conn)
 

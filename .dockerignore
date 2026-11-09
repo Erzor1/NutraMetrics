@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.git/
+data/raw/html_cache/
+catboost_info/
+.ipynb_checkpoints/
+.env

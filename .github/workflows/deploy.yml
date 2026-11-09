@@ -1,0 +1,67 @@
+name: NutraMetrics CI & Auto-Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  ci-verify:
+    name: Validate SQL Marts, Stats & Streamlit App
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Rebuild & Verify SQLite Analytical Views
+        run: python src/database.py
+
+      - name: Verify Statistical Hypothesis Engine
+        run: python src/hypothesis_testing.py
+
+      - name: Smoke-test Streamlit + Plotly Dashboard (All 5 Tabs)
+        run: |
+          python -c "
+          from streamlit.testing.v1 import AppTest
+          at = AppTest.from_file('app.py', default_timeout=40)
+          at.run()
+          assert len(at.exception) == 0, f'Streamlit exceptions: {at.exception}'
+          print('Streamlit AppTest passed cleanly across all 5 tabs!')
+          "
+
+  deploy-vps:
+    name: Deploy to VPS via SSH (Optional)
+    needs: ci-verify
+    runs-on: ubuntu-latest
+    if: ${{ secrets.VPS_HOST != '' && secrets.VPS_USER != '' && secrets.VPS_SSH_KEY != '' }}
+    steps:
+      - name: Deploy latest main branch to VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            set -e
+            APP_DIR="${{ secrets.VPS_APP_DIR || '~/NutraMetrics' }}"
+            if [ ! -d "$APP_DIR" ]; then
+              git clone https://github.com/${{ github.repository }}.git "$APP_DIR"
+            fi
+            cd "$APP_DIR"
+            git fetch origin main
+            git reset --hard origin/main
+            docker compose up -d --build --remove-orphans
+            docker image prune -f
