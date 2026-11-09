@@ -15,6 +15,7 @@ data/raw/html_cache/
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
+catboost_info/
 
 # Environment & secrets
 .env

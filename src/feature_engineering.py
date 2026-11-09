@@ -70,11 +70,7 @@ def classify_nutra_category(row: pd.Series) -> str:
     ).lower()
     title_low = f"{_s(row.get('title'))} {_s(row.get('trade_name'))}".lower()
 
-    # Check explicit focal group first if not generic
-    if src_group in CATEGORY_REFERENCE_NORMS and src_group != "Мультивитамины":
-        return src_group
-
-    # Keyword priority on title/trade_name first, then full composition
+    # 1. Explicit title / trade_name keywords take highest priority to prevent cross-search mislabeling
     if re.search(r"коллаген|collagen", title_low):
         return "Коллаген"
     if re.search(r"куркум|curcum", title_low):
@@ -94,6 +90,12 @@ def classify_nutra_category(row: pd.Series) -> str:
         title_low,
     ):
         return "Витамины группы B"
+    if re.search(r"мультивитамин|поливитамин|ревит|ундевит|гексавит|алфавит|компливит|супрадин|витрум|центрум", title_low):
+        return "Мультивитамины"
+
+    # 2. Fallback to explicit focal search group
+    if src_group in CATEGORY_REFERENCE_NORMS:
+        return src_group
 
     # Secondary check on composition/active substance for "Advanced R&D" or catalog items
     if re.search(r"холекальциферол|витамин\s*[dд]3", text) and not re.search(r"мульти|комплекс от а до", title_low):
@@ -379,6 +381,11 @@ def classify_bioavailability_tier(row: pd.Series, category: str, delivery_form: 
         _s(row.get(c))
         for c in ("title", "trade_name", "active_substance_spec", "composition_text", "description_text")
     ).lower().replace("ё", "е")
+    title_low = f"{_s(row.get('title'))} {_s(row.get('trade_name'))}".lower().replace("ё", "е")
+
+    # 0. Classic sugar-coated dragees (Ревит, Ундевит, Гексавит, Аскорутин) are strictly Tier 1
+    if re.search(r"\b(?:ревит|ундевит|гексавит|гендевит|аскорутин|драже)\b", title_low):
+        return "Tier 1: Basic Inorganic", 1.00, "Сахарное драже базового поколения (Tier 1)"
 
     # 1. Detect Tier 3 (Advanced R&D Delivery Systems, K_bio = 1.75)
     tier3_matches: list[str] = []
@@ -396,8 +403,11 @@ def classify_bioavailability_tier(row: pd.Series, category: str, delivery_form: 
         tier3_matches.append("Куркумин + биоэнхансер Пиперин (BioPerine)")
     if category == "Витамин D3" and re.search(r"менахинон-7|мк-7|mk-7|витамин\s*[kк]2", full_text):
         tier3_matches.append("Синергическая матрица D3 + K2 (MK-7)")
-    if category == "Омега-3" and re.search(r"триглицерид|rtg|концентрат.*(?:950|1000|1200)|тройная омега", full_text):
-        tier3_matches.append("Высококонцентрированные триглицериды (rTG Omega-3)")
+    if category == "Омега-3" and re.search(
+        r"триглицерид|rtg|концентрат.*(?:950|1000|1200)|тройная омега|(?:60|70|75|80|85|90)\s*%",
+        full_text,
+    ):
+        tier3_matches.append("Высококонцентрированные триглицериды / концентрат (Omega-3 60-90%)")
     if category == "Коллаген" and re.search(r"трипептид|морской коллаген.*гиалурон", full_text):
         tier3_matches.append("Низкомолекулярные трипептиды морского коллагена")
 
@@ -536,10 +546,48 @@ def standardize_country(raw_country: Any) -> tuple[str, bool]:
     return primary, is_imported
 
 
+def filter_oral_nutraceuticals(df_raw: pd.DataFrame) -> pd.DataFrame:
+    """
+    Filter out non-oral forms (topical creams/ointments, toothpastes, hospital IV infusions/injections)
+    and fix or drop broken clearance price anomalies (< 45 RUB).
+    """
+    df = df_raw.copy()
+    df = df[df["price_rub"].notna() & (df["price_rub"] > 0)].copy()
+
+    # Replace anomalous < 45 RUB min price with avg_market_price_rub if valid
+    low_mask = df["price_rub"] < 45.0
+    has_valid_avg = df["avg_market_price_rub"].notna() & (df["avg_market_price_rub"] >= 50.0)
+    df.loc[low_mask & has_valid_avg, "price_rub"] = df.loc[low_mask & has_valid_avg, "avg_market_price_rub"]
+
+    # Exclude rows where price is still < 45 RUB or > 9500 RUB (hospital packs)
+    df = df[(df["price_rub"] >= 45.0) & (df["price_rub"] <= 9500.0)].copy()
+
+    # Exclude topical cosmetics, toothpastes, and parenteral IV/IM infusions
+    exclude_re = re.compile(
+        r"для\s+наружного|для\s+местного|для\s+инфуз|для\s+инъекц|лиофилизат|"
+        r"раствор\s+для\s+внутривен|раствор\s+для\s+внутримыш|ампулы\s+для\s+инъекц|"
+        r"\bкрем\b|крем-гель|\bмазь\b|паста\s+для\s+наруж|цинковая\s+паста|паста\s+зубная|зубная\s+паста|"
+        r"гель\s+для\s+наруж|гель\s+косметич|шампунь|лосьон|бальзам\s+для\s+губ|"
+        r"сыворотка\s+для\s+лица|маска\s+для\s+лица|карамель\s+леденцовая\s+петушок|плитка",
+        re.IGNORECASE,
+    )
+    check_series = (
+        df["title"].fillna("")
+        + " "
+        + df["release_form_spec"].fillna("")
+        + " "
+        + df["category_meta"].fillna("")
+    )
+    keep_mask = ~check_series.str.contains(exclude_re, regex=True)
+    removed_count = int((~keep_mask).sum())
+    if removed_count > 0:
+        logger.info("Filtered out %d non-oral / cosmetic / parenteral IV items.", removed_count)
+    return df[keep_mask].reset_index(drop=True)
+
+
 def build_features(df_raw: pd.DataFrame) -> pd.DataFrame:
     """Run the full R&D and Unit Economics feature engineering pipeline."""
-    df = df_raw.copy()
-    df = df[df["price_rub"].notna() & (df["price_rub"] > 0)].reset_index(drop=True)
+    df = filter_oral_nutraceuticals(df_raw)
 
     # 1. Category & Delivery Form
     df["nutra_category"] = df.apply(classify_nutra_category, axis=1)
