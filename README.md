@@ -138,5 +138,5 @@ streamlit run app.py
 ### Запуск в Docker
 ```bash
 docker compose up -d --build
-# Дашборд будет доступен по адресу: http://localhost:8501
+# Дашборд будет доступен по адресу: http://localhost:8502
 ```

@@ -6,7 +6,7 @@ services:
     container_name: nutrametrics-streamlit
     restart: unless-stopped
     ports:
-      - "8501:8501"
+      - "8502:8501"
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONIOENCODING=utf-8
