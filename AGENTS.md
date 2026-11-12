@@ -1,30 +1,24 @@
-# NutraMetrics — Architecture & Engineering Guide
+# NutraMetrics — Compact Project Memory & Engineering State
 
-## Project Overview
-**NutraMetrics: Аналитика ценообразования, биодоступности форм доставки и поиск рыночных ниш на рынке БАДов и витаминов РФ**
+## 1. Current Project Status (Checkpoint)
+- **Repository:** `https://github.com/Erzor1/NutraMetrics` (branch `main`, synced at commit `eac47c5`).
+- **Local Server:** `http://127.0.0.1:8502` (bound explicitly to IPv4 `127.0.0.1:8502` to avoid VPN IPv6 `WinError 64` and avoid port collision with sibling project `PRRI` on `8501`). **Never modify anything in `../PRRI`.**
+- **Dataset (`data/processed/nutrametrics_priced.csv` & `data/nutrametrics.db`):** **897 deduplicated oral nutraceutical SKUs** across 9 categories (*Магний, Омега-3, Мультивитамины, Витамин D3, Железо, Коллаген, Цинк, Витамины группы B, Куркумин*) with live cross-aggregator prices (`Uteka.ru`, `Apteka.ru`, `Zdravcity.ru`, `Eapteka.ru`, `Ригла`, `Планета Здоровья`).
 
-An end-to-end Product Analytics & R&D Data Engineering project combining Nutraceutical R&D domain expertise (delivery systems, microencapsulation, bioavailability tiers, clean label analysis) with unit economics, hedonic pricing ML (`CatBoost` / `Ridge` + `SHAP`), SQL analytical marts, statistical hypothesis testing, and a dark-mode interactive Streamlit product dashboard.
+## 2. Core Pipeline & Domain Rules
+1. `src/scraper.py` — SSR HTML scraper for `uteka.ru` + partner pharmacy prices + cross-source deduplication.
+2. `src/feature_engineering.py` — **Strict Composition-First R&D Rules:**
+   - Excludes marketing `description_text` from `Tier 1–3` classification; uses only `title`, `trade_name`, `active_substance_spec`, and pure `composition_text`.
+   - Excludes excipient false-positives (`магния стеарат`, `оксид железа` dye) and non-supplement drugs (`L-Тироксин`, `Эутирокс`, `Мезим`, `Анаферон`, topical creams, IV infusions).
+   - **Tier 1 (`K_bio = 1.00`):** Inorganic salts (oxides, sulfates, carbonates), synthetic B-vitamins in plain tablets, sugar dragees (*Ревит, Ундевит, Гексавит*).
+   - **Tier 2 (`K_bio = 1.35`):** Organic salts (citrates, malates, lactates, picolinates, fumarates, gluconates), hydrolyzed collagen peptides, oil drops, softgels, effervescent tablets, gummies.
+   - **Tier 3 (`K_bio = 1.75`):** Amino acid chelates (bisglycinate, taurate, threonate), liposomal/micellar/microencapsulated forms (`Lipofer`, `SiderAL`, `NovaSOL`, `Аквадетрим`), coenzymes (`метилфолат`, `метилкобаламин`, `P-5-P`), `D3+K2 (MK-7)`, curcumin + `BioPerine`, `rTG` / 60–90% Omega-3 concentrates, collagen tripeptides.
+   - **Metrics:** `cost_per_day_rub` ($C_{\text{day}}$), `bap_dose_rub` ($\text{BAP-Dose} = C_{\text{day}} / (K_{\text{bio}} \cdot K_{\text{clean}} \cdot D_{\text{factor}})$), `nvi_score` (0–100).
+3. `src/pricing_model.py` — `CatBoostRegressor` Hedonic Pricing ($R^2 = 0.568$) + exact Ruble-level SHAP decomposition (`shap_*_rub`) + `brand_overpay_pct`.
+4. `src/database.py` & `sql/analytical_views.sql` — SQLite DB + 4 views (`vw_category_unit_economics`, `vw_white_space_matrix`, `vw_brand_rnd_scorecard`, `vw_cross_aggregator_arbitrage`).
+5. `src/hypothesis_testing.py` & `notebooks/eda_and_hypotheses.ipynb` — Statistical verification of `H1–H5` (`Kruskal-Wallis`, `Mann-Whitney U` + Holm, `Type-II ANOVA`, `Chi-Square` + Cramér's $V$, `Friedman` + `Wilcoxon`).
+6. `app.py` — 5-tab Streamlit Dark Mode UI with plain-Russian consumer labels, cache invalidated by file `mtime`.
 
-## Repository Structure
-- `.streamlit/config.toml` — Premium Dark Mode theme (`#0B0F19` background, `#111827` cards, `#10B981` BioTech emerald primary accent).
-- `src/scraper.py` — Live SSR HTML scraper for `https://uteka.ru` catalogs and focal search queries with disk caching, retry backoff, and structured extraction of Schema.org metadata, product specifications, and instruction blocks (`Состав`, `Способ применения и дозы`, `Описание`, `Показания`).
-- `src/feature_engineering.py` — R&D regex & domain dictionary pipeline extracting active dosages (`мг`, `мкг`, `МЕ`), pack count, daily serving size, course duration, delivery tier (`Tier 1`, `Tier 2`, `Tier 3`), clean-label coefficient ($K_{\text{clean}}$), `BAP-Dose`, and `NVI` (0–100).
-- `src/pricing_model.py` — Hedonic pricing regression model + SHAP explainability calculating fair price ($P_{\text{fair}}$) and `Brand Overpay %`.
-- `src/database.py` & `sql/analytical_views.sql` — SQLite ingestion & analytical views using CTEs and window functions (`ROW_NUMBER()`, `PERCENT_RANK()`, `AVG() OVER (PARTITION BY ...)`).
-- `notebooks/eda_and_hypotheses.ipynb` — Exploratory Data Analysis & statistical hypothesis verification (`scipy.stats`, `statsmodels`).
-- `app.py` — 5-tab Streamlit web application in Dark FinTech / BioTech Glassmorphism style.
-- `Dockerfile`, `docker-compose.yml`, `.github/workflows/deploy.yml` — Containerization and automated CI/CD deployment to VPS via SSH.
-
-## Custom Metrics Specification
-1. **Nominal Daily Course Cost ($C_{\text{day}}$):**
-   $$C_{\text{day}} = \frac{\text{Price}}{\text{Pack Count} / \text{Daily Serving}}$$
-2. **Bioavailability & Delivery Technology Coefficient ($K_{\text{bio}}$):**
-   - `Tier 1` ($K_{\text{bio}} = 1.00$): Inorganic salts (oxides, carbonates, sulfates), unstandardized fish oil, basic compressed tablets.
-   - `Tier 2` ($K_{\text{bio}} = 1.35$): Organic salts (citrates, malates, lactates, gluconates, picolinates), softgels, liquid oil drops, effervescent tablets, gummies/pastilles.
-   - `Tier 3` ($K_{\text{bio}} = 1.75$): Advanced R&D Delivery Systems — amino acid chelates (bisglycinate, taurate, threonate), liposomal, micellar, microencapsulated forms, active coenzyme vitamins (methylcobalamin, methylfolate, P-5-P), curcumin + piperine/phytosomes, high-concentration triglyceride Omega-3.
-3. **Clean Label Factor ($K_{\text{clean}} \in [0.85, 1.15]$):**
-   - Penalizes sugar/glucose syrup as primary excipients, artificial dyes, and titanium dioxide (`E171`); rewards minimal/clean excipient profiles.
-4. **Nutraceutical Value Index (`NVI`, 0–100):**
-   - Category-normalized composite index combining bioavailability-adjusted cost efficiency (`BAP-Dose`), delivery technology tier, clean label score, dosage adequacy, and consumer rating confidence.
-5. **Brand Overpay %:**
-   $$\text{Brand Overpay \%} = \frac{P_{\text{actual}} - P_{\text{fair}}}{P_{\text{fair}}} \times 100\%$$
+## 3. Token-Saving Communication Protocol
+- Prefer targeted `edit` calls and concise single-command verifications over large file dumps.
+- Report only deltas and actionable results.
