@@ -265,7 +265,7 @@ def render_kpi_card(title: str, value: str, subtitle: str, style_variant: str = 
 
 
 @st.cache_data(show_spinner=False)
-def load_dataset() -> pd.DataFrame:
+def load_dataset(_mtime: float = 0.0) -> pd.DataFrame:
     df = pd.read_csv(PRICED_CSV_PATH)
     bool_cols = ["in_stock", "is_imported", "has_added_sugar", "has_titanium_dioxide", "has_artificial_dyes"]
     for c in bool_cols:
@@ -277,12 +277,12 @@ def load_dataset() -> pd.DataFrame:
 
 
 @st.cache_data(show_spinner=False)
-def load_model_metadata() -> dict[str, Any]:
+def load_model_metadata(_mtime: float = 0.0) -> dict[str, Any]:
     return json.loads(MODEL_META_PATH.read_text(encoding="utf-8"))
 
 
 @st.cache_data(show_spinner=False)
-def load_hypothesis_results() -> dict[str, Any]:
+def load_hypothesis_results(_mtime: float = 0.0) -> dict[str, Any]:
     return json.loads(HYPOTHESIS_JSON_PATH.read_text(encoding="utf-8"))
 
 
@@ -304,9 +304,9 @@ def query_sqlite(sql_query: str) -> pd.DataFrame:
 
 
 def main() -> None:
-    df_all = load_dataset()
-    model_meta = load_model_metadata()
-    hyp_results = load_hypothesis_results()
+    df_all = load_dataset(PRICED_CSV_PATH.stat().st_mtime)
+    model_meta = load_model_metadata(MODEL_META_PATH.stat().st_mtime)
+    hyp_results = load_hypothesis_results(HYPOTHESIS_JSON_PATH.stat().st_mtime)
     cb_model = load_catboost_model()
 
     # =========================================================================
@@ -425,7 +425,7 @@ def main() -> None:
                     </p>
                 </div>
                 <div>
-                    <span class="badge-emerald">ЖИВЫЕ ДАННЫЕ АПТЕК: 907 ТОВАРОВ</span>
+                    <span class="badge-emerald">ЖИВЫЕ ДАННЫЕ АПТЕК: 897 ТОВАРОВ</span>
                     <span class="badge-cyan">CatBoost ML + SHAP</span>
                 </div>
             </div>
@@ -826,7 +826,7 @@ def main() -> None:
         calc_mode = st.radio(
             "Выберите режим работы калькулятора:",
             options=[
-                "🔍 Режим А: Проверить реальный препарат из аптеки (разбор цены и состава из базы 907 товаров)",
+                "🔍 Режим А: Проверить реальный препарат из аптеки (разбор цены и состава из базы 897 товаров)",
                 "🧪 Режим Б: Симулятор создания нового БАДа (расчет цены для запуска продукта или проверки своей идеи)",
             ],
             horizontal=True,

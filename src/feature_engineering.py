@@ -75,43 +75,46 @@ def classify_nutra_category(row: pd.Series) -> str:
         return "Коллаген"
     if re.search(r"куркум|curcum", title_low):
         return "Куркумин"
-    if re.search(r"омега|omega|рыбий жир|рыбный жир|эпк|дгк", title_low):
+    if re.search(r"омега|omega|рыбий жир|рыбный жир|эпк|дгк|омакор", title_low):
         return "Омега-3"
-    if re.search(r"витамин\s*[dд]3?|холекальциферол|колекальциферол|детримакс|аквадетрим", title_low):
+    if re.search(r"витамин\s*[dд]3?|холекальциферол|колекальциферол|детримакс|аквадетрим|вигантол|дэтриферол", title_low):
         return "Витамин D3"
-    if re.search(r"магн(?:ий|е|ия)|magne|mg\b", title_low):
+    if re.search(r"магн(?:ий|е|ия)|magne|mg\b|магвит|аспаркам|панангин", title_low):
         return "Магний"
-    if re.search(r"желез(?:о|а)|ферр|сидерал|гемаплекс|iron|ferr", title_low):
+    if re.search(r"желез(?:о|а)|ферр|сидерал|гемаплекс|iron|ferr|фенюльс|сорбифер|тардиферон|мальтофер|тотема", title_low):
         return "Железо"
-    if re.search(r"цинк|zinc|zn\b", title_low):
+    if re.search(r"цинк|zinc|zn\b|селцинк", title_low):
         return "Цинк"
     if re.search(
-        r"фолат|метилфолат|фолиев|цианокобаламин|метилкобаламин|биотин|нейромультивит|комплигам|пентовит|группы\s*[bв]|b-complex|в-комплекс",
+        r"фолат|метилфолат|фолиев|цианокобаламин|метилкобаламин|биотин|нейромультивит|нейробион|мильгамма|бинавит|витапрайм|бенфотиамин|комплигам|пентовит|группы\s*[bв]|b-complex|в-комплекс|витамин\s*[bв]\d+",
         title_low,
     ):
         return "Витамины группы B"
-    if re.search(r"мультивитамин|поливитамин|ревит|ундевит|гексавит|алфавит|компливит|супрадин|витрум|центрум", title_low):
+    if re.search(r"мультивитамин|поливитамин|ревит|ундевит|гексавит|алфавит|компливит|супрадин|витрум|центрум|пиковит|элевит|дуовит|берокка", title_low):
         return "Мультивитамины"
 
-    # 2. Fallback to explicit focal search group
-    if src_group in CATEGORY_REFERENCE_NORMS:
-        return src_group
-
-    # Secondary check on composition/active substance for "Advanced R&D" or catalog items
-    if re.search(r"холекальциферол|витамин\s*[dд]3", text) and not re.search(r"мульти|комплекс от а до", title_low):
+    # 2. Check active substance / composition (ignoring excipients like magnesium stearate or iron oxide dye)
+    text_no_excip = re.sub(
+        r"магния\s+стеарат|стеарат\s+магния|магниев[а-я]+\s+сол[а-я]+\s+стеаринов[а-я]+|оксид[а-я]*\s+железа|железа\s+оксид[а-я]*|щитовидн[а-я]+\s+желез[а-я]+",
+        "",
+        text,
+    )
+    if re.search(r"холекальциферол|витамин\s*[dд]3", text_no_excip) and not re.search(r"мульти|комплекс от а до", title_low):
         return "Витамин D3"
-    if re.search(r"коллаген", text):
+    if re.search(r"коллаген", text_no_excip):
         return "Коллаген"
-    if re.search(r"куркумин", text):
+    if re.search(r"куркумин|экстракт\s+куркумы", text_no_excip):
         return "Куркумин"
-    if re.search(r"омега-3|эйкозапентаенов|докозагексаенов", text):
+    if re.search(r"омега-3|эйкозапентаенов|докозагексаенов", text_no_excip):
         return "Омега-3"
-    if re.search(r"магния\s+(?:цитрат|бисглицинат|хелат|оксид|лактат|малат)", text):
+    if re.search(r"магния\s+(?:цитрат|бисглицинат|глицинат|хелат|оксид|лактат|малат|таурат|треонат|аспарагинат)", text_no_excip):
         return "Магний"
-    if re.search(r"железа\s+(?:бисглицинат|фумарат|пирофосфат|сульфат|хелат)", text):
+    if re.search(r"железа\s+(?:бисглицинат|бис-глицинат|фумарат|пирофосфат|сульфат|хелат|глюконат)", text_no_excip):
         return "Железо"
-    if re.search(r"цинка\s+(?:пиколинат|цитрат|глицинат|оксид|сульфат|хелат)", text):
+    if re.search(r"цинка\s+(?:пиколинат|цитрат|глицинат|бисглицинат|оксид|сульфат|хелат|глюконат)", text_no_excip):
         return "Цинк"
+    if re.search(r"бенфотиамин|метилфолат|метилкобаламин|цианокобаламин", text_no_excip):
+        return "Витамины группы B"
 
     return "Мультивитамины"
 
@@ -306,8 +309,13 @@ def extract_standardized_dosage(row: pd.Series, category: str, daily_serving: fl
 
     elif category == "Магний":
         m_mg = re.findall(r"(\d{2,4})\s*мг", text_sources, flags=re.IGNORECASE)
-        valid_mg = [float(x) for x in m_mg if 30 <= float(x) <= 800]
-        extracted_per_unit = valid_mg[0] if valid_mg else 200.0
+        valid_mg = [float(x) for x in m_mg if 25 <= float(x) <= 800]
+        if valid_mg:
+            extracted_per_unit = valid_mg[0]
+        else:
+            # Check table format: "Магний \n 65 \n 16"
+            m_tbl = re.search(r"магний[^\d]{1,25}(\d{2,3})\b", text_sources, flags=re.IGNORECASE)
+            extracted_per_unit = float(m_tbl.group(1)) if m_tbl else 100.0
 
     elif category == "Железо":
         m_mg = re.findall(r"(\d+(?:[.,]\d+)?)\s*мг", text_sources, flags=re.IGNORECASE)
@@ -368,86 +376,158 @@ def extract_standardized_dosage(row: pd.Series, category: str, daily_serving: fl
 
 def classify_bioavailability_tier(row: pd.Series, category: str, delivery_form: str) -> tuple[str, float, str]:
     """
-    R&D Expert Classification of Chemical Form & Delivery Technology Tier:
-    - Tier 3 (K_bio = 1.75): Liposomal, micellar, microencapsulated, amino acid chelates (bisglycinate,
-      taurate, threonate), active coenzyme vitamins (methylfolate, methylcobalamin, P-5-P),
-      curcumin + piperine/phytosomes, triglyceride Omega-3 concentrate.
-    - Tier 2 (K_bio = 1.35): Organic salts (citrate, malate, lactate, gluconate, picolinate, fumarate),
-      gummies/pastilles, effervescent tablets, liquid oil drops, hydrolyzed collagen peptides, softgels.
-    - Tier 1 (K_bio = 1.00): Inorganic salts (oxide, carbonate, sulfate, chloride), synthetic cyanocobalamin/folic acid
-      in basic compressed tablets, unstandardized basic forms.
+    R&D Expert Classification of Chemical Form & Delivery Technology Tier.
+
+    CRITICAL RULE: Uses ONLY `title`, `trade_name`, `active_substance_spec`, and the pure
+    ingredient list of `composition_text` (excluding marketing `description_text`!).
+    Furthermore, explicit chemical salt names in `composition_text` override marketing buzzwords.
     """
-    full_text = " ".join(
-        _s(row.get(c))
-        for c in ("title", "trade_name", "active_substance_spec", "composition_text", "description_text")
+    title_spec = " ".join(
+        _s(row.get(c)) for c in ("title", "trade_name", "active_substance_spec")
     ).lower().replace("ё", "е")
-    title_low = f"{_s(row.get('title'))} {_s(row.get('trade_name'))}".lower().replace("ё", "е")
+
+    raw_comp = _s(row.get("composition_text")).lower().replace("ё", "е")
+    # Strip any trailing marketing description if Uteka combined "Состав и описание" in one block
+    comp_only = re.split(
+        r"(?:\n|^)\s*(?:описание|свойства\s+компонентов|активные\s+компоненты\s+в\s+деталях|фармакологическое\s+действие|рекомендации\s+по\s+применению)\b",
+        raw_comp,
+    )[0]
+    strict_text = f"{title_spec} | {comp_only}"
 
     # 0. Classic sugar-coated dragees (Ревит, Ундевит, Гексавит, Аскорутин) are strictly Tier 1
-    if re.search(r"\b(?:ревит|ундевит|гексавит|гендевит|аскорутин|драже)\b", title_low):
+    if re.search(r"\b(?:ревит|ундевит|гексавит|гендевит|аскорутин|драже)\b", title_spec):
         return "Tier 1: Basic Inorganic", 1.00, "Сахарное драже базового поколения (Tier 1)"
 
-    # 1. Detect Tier 3 (Advanced R&D Delivery Systems, K_bio = 1.75)
-    tier3_matches: list[str] = []
-    if re.search(r"липосом|liposom", full_text):
-        tier3_matches.append("Липосомальная инкапсуляция (Liposomal)")
-    if re.search(r"мицелл|micell|аквадетрим", full_text):
-        tier3_matches.append("Мицеллированная форма (Micellar)")
-    if re.search(r"микроинкапсул|нанокапсул|сукросом|сидерал|фитосом", full_text):
-        tier3_matches.append("Микроинкапсулированная / Сукросомальная матрица")
-    if re.search(r"бисглицинат|глицинат|таурат|треонат|хелат|chelat", full_text):
-        tier3_matches.append("Аминокислотный хелат (Бисглицинат / Таурат / Треонат)")
-    if re.search(r"метилфолат|метафолин|кватрефолик|метилкобаламин|пиридоксаль-5-фосфат|p-5-p", full_text):
-        tier3_matches.append("Коферментная активная форма (Метилфолат / Метилкобаламин / P-5-P)")
-    if category == "Куркумин" and re.search(r"пиперин|биоперин|bioperine|экстракт черного перца", full_text):
-        tier3_matches.append("Куркумин + биоэнхансер Пиперин (BioPerine)")
-    if category == "Витамин D3" and re.search(r"менахинон-7|мк-7|mk-7|витамин\s*[kк]2", full_text):
-        tier3_matches.append("Синергическая матрица D3 + K2 (MK-7)")
-    if category == "Омега-3" and re.search(
-        r"триглицерид|rtg|концентрат.*(?:950|1000|1200)|тройная омега|(?:60|70|75|80|85|90)\s*%",
-        full_text,
-    ):
-        tier3_matches.append("Высококонцентрированные триглицериды / концентрат (Omega-3 60-90%)")
-    if category == "Коллаген" and re.search(r"трипептид|морской коллаген.*гиалурон", full_text):
-        tier3_matches.append("Низкомолекулярные трипептиды морского коллагена")
+    # 1. Category-specific strict chemical rules (Composition overrides marketing title!)
+    if category == "Магний":
+        has_chelate_in_comp = bool(re.search(r"бисглицинат|глицинат|таурат|треонат|липосом|мицелл", comp_only))
+        has_chelate_in_title = bool(re.search(r"бисглицинат|глицинат|таурат|треонат|липосом|мицелл|хелат", title_spec))
+        has_organic_in_comp = bool(re.search(r"цитрат|малат|лактат|аспарагинат|аспартат|оротат|глюконат|пиколинат", comp_only))
+        has_inorganic_in_comp = bool(re.search(r"магния\s+(?:оксид|карбонат|сульфат|гидроксид)|(?:оксид|карбонат|сульфат|гидроксид)\s+магния", comp_only))
 
-    if tier3_matches:
-        return "Tier 3: Advanced R&D", 1.75, tier3_matches[0]
+        if re.search(r"липосом|мицелл", strict_text):
+            return "Tier 3: Advanced R&D", 1.75, "Липосомальная / мицеллированная матрица магния"
+        if has_chelate_in_comp:
+            return "Tier 3: Advanced R&D", 1.75, "Аминокислотный хелат магния (Бисглицинат / Таурат / Треонат)"
+        # If composition explicitly states only citrate/malate/lactate/asparaginate without bisglycinate/taurate/threonate -> Tier 2!
+        if has_organic_in_comp and not has_chelate_in_comp:
+            if re.search(r"цитрат", comp_only):
+                return "Tier 2: Organic / Enhanced", 1.35, "Органическая соль (Магния цитрат)"
+            return "Tier 2: Organic / Enhanced", 1.35, "Органическая соль магния (Малат / Лактат / Аспарагинат)"
+        if has_inorganic_in_comp and not has_chelate_in_comp:
+            return "Tier 1: Basic Inorganic", 1.00, "Неорганическая соль магния (Оксид / Карбонат / Сульфат)"
+        if has_chelate_in_title and not has_organic_in_comp and not has_inorganic_in_comp:
+            return "Tier 3: Advanced R&D", 1.75, "Аминокислотный хелат магния (Бисглицинат / Хелат)"
+        if re.search(r"цитрат|малат|лактат|оротат|аспарагинат", title_spec):
+            return "Tier 2: Organic / Enhanced", 1.35, "Органическая соль магния (Цитрат / Малат / Лактат)"
 
-    # 2. Detect explicit Tier 1 inorganic forms first (unless delivered in a Tier 2 galenic system like effervescent/gummies)
-    inorganic_match = re.search(
-        r"магния\s+оксид|оксид\s+магния|цинка\s+оксид|оксид\s+цинка|железа\s+сульфат|сульфат\s+железа|"
-        r"кальция\s+карбонат|карбонат\s+магния|цинка\s+сульфат",
-        full_text,
-    )
-    if inorganic_match and delivery_form in ("Таблетки твердые", "Капсулы (Softgels / Vcaps)"):
-        return "Tier 1: Basic Inorganic", 1.00, f"Неорганическая соль ({inorganic_match.group(0)})"
+    elif category == "Железо":
+        if re.search(r"липосом|мицелл|сукросом|сидерал|ферлип|липофер|микрокапсул|микроинкапсул", strict_text):
+            return "Tier 3: Advanced R&D", 1.75, "Микроинкапсулированное / Липосомальное железо (Lipofer / SiderAL)"
+        has_bisglyc_comp = bool(re.search(r"бисглицинат|бис-глицинат|глицинат|хелат", comp_only))
+        has_organic_fe = bool(re.search(r"фумарат|глюконат|лактат|цитрат|аскорбат", comp_only))
+        has_inorganic_fe = bool(re.search(r"сульфат\s+железа|железа\s+сульфат|железа\s+хлорид|полимальтозат", comp_only))
 
-    # 3. Detect Tier 2 (Organic Salts & Enhanced Consumer Delivery Forms, K_bio = 1.35)
-    tier2_matches: list[str] = []
-    if re.search(r"цитрат|citrat", full_text):
-        tier2_matches.append("Органическая соль (Цитрат)")
-    if re.search(r"пиколинат|picolinat", full_text):
-        tier2_matches.append("Органическая соль (Пиколинат)")
-    if re.search(r"малат|лактат|глюконат|фумарат|аскорбат|аспарагинат|оротат", full_text):
-        tier2_matches.append("Органическая соль (Малат / Лактат / Фумарат)")
-    if category == "Коллаген" and re.search(r"пептид|гидролиз", full_text):
-        tier2_matches.append("Гидролизованные пептиды коллагена")
-    if delivery_form == "Жевательные пастилки (Gummies)":
-        tier2_matches.append("Жевательная пастилка (Gummy Matrix)")
-    if delivery_form == "Шипучие таблетки (Effervescent)":
-        tier2_matches.append("Шипучая буферная система (Effervescent)")
-    if delivery_form == "Жидкие формы / Капли / Спрей":
-        tier2_matches.append("Масляный / жидкий раствор высокой дисперсности")
-    if delivery_form == "Таблетки жевательные / сублингвальные":
-        tier2_matches.append("Сублингвальная / жевательная форма")
-    if category == "Омега-3" and delivery_form == "Капсулы (Softgels / Vcaps)":
-        tier2_matches.append("Мягкие желатиновые капсулы (Softgels)")
+        if has_bisglyc_comp:
+            return "Tier 3: Advanced R&D", 1.75, "Аминокислотный хелат (Железа бисглицинат)"
+        if has_organic_fe and not has_bisglyc_comp:
+            return "Tier 2: Organic / Enhanced", 1.35, "Органическая соль железа (Фумарат / Глюконат)"
+        if has_inorganic_fe:
+            return "Tier 1: Basic Inorganic", 1.00, "Неорганическая соль железа (Сульфат / Полимальтозат)"
+        if re.search(r"бисглицинат|глицинат|хелат", title_spec):
+            return "Tier 3: Advanced R&D", 1.75, "Аминокислотный хелат (Железа бисглицинат)"
 
-    if tier2_matches:
-        return "Tier 2: Organic / Enhanced", 1.35, tier2_matches[0]
+    elif category == "Цинк":
+        if re.search(r"липосом|мицелл", strict_text):
+            return "Tier 3: Advanced R&D", 1.75, "Липосомальная матрица цинка"
+        has_chelate_zn = bool(re.search(r"бисглицинат|глицинат|аминокислотный\s+хелат", comp_only))
+        has_organic_zn = bool(re.search(r"пиколинат|цитрат|глюконат|лактат|аспарагинат|ацетат", comp_only))
+        has_inorganic_zn = bool(re.search(r"цинка\s+(?:оксид|сульфат)|(?:оксид|сульфат)\s+цинка", comp_only))
 
-    # 4. Default Tier 1 (Basic Inorganic / Standard Tablet, K_bio = 1.00)
+        if has_chelate_zn and not has_inorganic_zn:
+            return "Tier 3: Advanced R&D", 1.75, "Аминокислотный хелат (Цинка бисглицинат / глицинат)"
+        if has_organic_zn and not has_chelate_zn:
+            if re.search(r"пиколинат", comp_only):
+                return "Tier 2: Organic / Enhanced", 1.35, "Органическая соль (Цинка пиколинат)"
+            return "Tier 2: Organic / Enhanced", 1.35, "Органическая соль (Цинка цитрат / глюконат)"
+        if has_inorganic_zn:
+            return "Tier 1: Basic Inorganic", 1.00, "Неорганическая соль цинка (Оксид / Сульфат)"
+        if re.search(r"бисглицинат|глицинат|хелат", title_spec) and not has_organic_zn:
+            return "Tier 3: Advanced R&D", 1.75, "Аминокислотный хелат (Цинка бисглицинат)"
+        if re.search(r"пиколинат|цитрат|глюконат", title_spec):
+            return "Tier 2: Organic / Enhanced", 1.35, "Органическая соль (Цинка пиколинат / цитрат)"
+
+    elif category == "Витамин D3":
+        if re.search(r"липосом|liposom", strict_text):
+            return "Tier 3: Advanced R&D", 1.75, "Липосомальная инкапсуляция (Liposomal D3)"
+        if re.search(r"мицелл|micell|аквадетрим", strict_text):
+            return "Tier 3: Advanced R&D", 1.75, "Мицеллированный раствор (Micellar D3)"
+        if re.search(r"менахинон-7|мк-7|mk-7|витамин\s*[kк]2|[dд]3\s*\+\s*[kк]2", strict_text):
+            return "Tier 3: Advanced R&D", 1.75, "Синергическая матрица Витамин D3 + K2 (MK-7)"
+        if re.search(r"триглицерид|мст|mct|оливковое\s+масло|маслян", strict_text) or delivery_form in (
+            "Жидкие формы / Капли / Спрей",
+            "Жевательные пастилки (Gummies)",
+            "Шипучие таблетки (Effervescent)",
+            "Таблетки жевательные / сублингвальные",
+        ):
+            return "Tier 2: Organic / Enhanced", 1.35, "Масляный раствор / МСТ-капли / Пастилки (Tier 2)"
+        return "Tier 1: Basic Inorganic", 1.00, "Сухие прессованные таблетки / капсулы D3 (Tier 1)"
+
+    elif category == "Омега-3":
+        is_plant_369 = bool(re.search(r"льнян|3-6-9|кедров|бораго|тыквен", strict_text))
+        if not is_plant_369:
+            if re.search(r"триглицерид|rtg|r-tg|фосфолипид|масло\s+криля|липосом|мицелл", strict_text):
+                return "Tier 3: Advanced R&D", 1.75, "Реэтерифицированные триглицериды / Фосфолипиды (rTG Omega-3)"
+            if re.search(r"(?:омега[-\s]*3|концентрат|рыбий\s+жир)\s*(?:ультра\s*)?(?:60|70|75|80|85|90)\s*%|тройная\s+омега[-\s]*3\s*950", title_spec):
+                return "Tier 3: Advanced R&D", 1.75, "Высококонцентрированный рыбий жир (Omega-3 60–90%)"
+        if is_plant_369 and not re.search(r"рыбий\s+жир|жир\s+рыб", comp_only):
+            return "Tier 1: Basic Inorganic", 1.00, "Растительное льняное масло (АЛК Омега 3-6-9)"
+        return "Tier 2: Organic / Enhanced", 1.35, "Мягкие желатиновые капсулы рыбьего жира (Softgels)"
+
+    elif category == "Куркумин":
+        if re.search(r"липосом|мицелл|novasol|фитосом|твин\s*80|полисорбат\s*80", strict_text):
+            return "Tier 3: Advanced R&D", 1.75, "Мицеллированный / Липосомальный куркумин (NovaSOL)"
+        if re.search(r"пиперин|биоперин|bioperine|экстракт\s+черного\s+перца", strict_text):
+            return "Tier 3: Advanced R&D", 1.75, "Куркумин + биоэнхансер Пиперин (BioPerine)"
+        return "Tier 2: Organic / Enhanced", 1.35, "Стандартизированный экстракт куркумы (без пиперина)"
+
+    elif category == "Коллаген":
+        if re.search(r"трипептид|липосом|мицелл|микроинкапсул", strict_text):
+            return "Tier 3: Advanced R&D", 1.75, "Низкомолекулярные трипептиды / липосомальный коллаген"
+        return "Tier 2: Organic / Enhanced", 1.35, "Гидролизованные пептиды коллагена (Tier 2)"
+
+    elif category == "Витамины группы B":
+        if re.search(r"метилфолат|метафолин|кватрефолик|метилкобаламин|пиридоксаль-5-фосфат|p-5-p|липосом|мицелл", strict_text):
+            return "Tier 3: Advanced R&D", 1.75, "Коферментная активная форма (Метилфолат / Метилкобаламин / P-5-P)"
+        if delivery_form in (
+            "Жевательные пастилки (Gummies)",
+            "Шипучие таблетки (Effervescent)",
+            "Жидкие формы / Капли / Спрей",
+            "Таблетки жевательные / сублингвальные",
+        ) or re.search(r"бисглицинат|цитрат|хелат", comp_only):
+            return "Tier 2: Organic / Enhanced", 1.35, "Улучшенная сублингвальная / жидкая / органическая форма B-комплекса"
+        return "Tier 1: Basic Inorganic", 1.00, "Синтетический B-комплекс в обычных таблетках (Цианокобаламин / Пиридоксин)"
+
+    elif category == "Мультивитамины":
+        if re.search(r"липосом|мицелл", strict_text) or (
+            re.search(r"метилфолат|метилкобаламин", comp_only)
+            and re.search(r"бисглицинат|глицинат|хелат", comp_only)
+        ):
+            return "Tier 3: Advanced R&D", 1.75, "Коферментный и хелатный мультивитаминный комплекс (Tier 3)"
+        if delivery_form in (
+            "Жевательные пастилки (Gummies)",
+            "Шипучие таблетки (Effervescent)",
+            "Жидкие формы / Капли / Спрей",
+            "Таблетки жевательные / сублингвальные",
+        ) or re.search(r"цитрат|фумарат|глюконат|пиколинат|малат|лактат", comp_only):
+            return "Tier 2: Organic / Enhanced", 1.35, "Мультивитаминный комплекс с органическими солями / в пастилках / шипучий"
+        return "Tier 1: Basic Inorganic", 1.00, "Базовый таблетированный комплекс на неорганических солях (Tier 1)"
+
+    # Fallback general check on strict_text
+    if re.search(r"липосом|мицелл|микроинкапсул|бисглицинат|таурат|треонат|метилфолат|метилкобаламин", strict_text):
+        return "Tier 3: Advanced R&D", 1.75, "Высокотехнологичная R&D форма (Хелат / Липосомы)"
+    if re.search(r"цитрат|малат|лактат|пиколинат|фумарат|глюконат", strict_text):
+        return "Tier 2: Organic / Enhanced", 1.35, "Органическая соль (Цитрат / Малат / Пиколинат)"
     return "Tier 1: Basic Inorganic", 1.00, "Базовая фармакопейная форма (Таблетки / Капсулы)"
 
 
@@ -562,13 +642,15 @@ def filter_oral_nutraceuticals(df_raw: pd.DataFrame) -> pd.DataFrame:
     # Exclude rows where price is still < 45 RUB or > 9500 RUB (hospital packs)
     df = df[(df["price_rub"] >= 45.0) & (df["price_rub"] <= 9500.0)].copy()
 
-    # Exclude topical cosmetics, toothpastes, and parenteral IV/IM infusions
+    # Exclude topical cosmetics, toothpastes, parenteral IV/IM infusions, and non-supplement prescription drugs
     exclude_re = re.compile(
         r"для\s+наружного|для\s+местного|для\s+инфуз|для\s+инъекц|лиофилизат|"
         r"раствор\s+для\s+внутривен|раствор\s+для\s+внутримыш|ампулы\s+для\s+инъекц|"
         r"\bкрем\b|крем-гель|\bмазь\b|паста\s+для\s+наруж|цинковая\s+паста|паста\s+зубная|зубная\s+паста|"
         r"гель\s+для\s+наруж|гель\s+косметич|шампунь|лосьон|бальзам\s+для\s+губ|"
-        r"сыворотка\s+для\s+лица|маска\s+для\s+лица|карамель\s+леденцовая\s+петушок|плитка",
+        r"сыворотка\s+для\s+лица|сыворотка-концентрат|от\s+пигментных\s+пятен|маска\s+для\s+лица|"
+        r"карамель\s+леденцовая\s+петушок|плитка|вагинальн|ректальн|"
+        r"l-тироксин|эутирокс|левотироксин|анаферон|эзиклен|мезим\s+форте",
         re.IGNORECASE,
     )
     check_series = (
