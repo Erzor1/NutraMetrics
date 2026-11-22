@@ -19,7 +19,17 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from src.feature_engineering import CATEGORY_REFERENCE_NORMS
-from src.pricing_model import ALL_FEATURES, CAT_FEATURES, decompose_shap_to_rubles
+from src.shap_rubles import decompose_shap_to_rubles
+
+CAT_FEATURES = ["nutra_category", "delivery_form", "bio_tier"]
+ALL_FEATURES = CAT_FEATURES + [
+    "log_course_days",
+    "log_dosage_adequacy",
+    "log_pack_servings",
+    "k_bio",
+    "k_clean",
+    "is_imported_int",
+]
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 PRICED_CSV_PATH = PROJECT_ROOT / "data" / "processed" / "nutrametrics_priced.csv"
