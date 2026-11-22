@@ -9,7 +9,7 @@
 
 ### [![🌐 Открыть живой дашборд](https://img.shields.io/badge/%F0%9F%8C%90_%D0%9E%D1%82%D0%BA%D1%80%D1%8B%D1%82%D1%8C_%D0%B6%D0%B8%D0%B2%D0%BE%D0%B9_%D0%B4%D0%B0%D1%88%D0%B1%D0%BE%D1%80%D0%B4-nutrametrics--analytics.streamlit.app-10B981?style=for-the-badge&logo=streamlit&logoColor=white)](https://nutrametrics-analytics.streamlit.app/)
 
-**Автор:** Бурляев Д.В. *(6+ лет опыта в R&D нутрицевтиков «Nuversys» и фармацевтике «Биннофарм Групп» → Аналитик данных)*  
+**Автор:** Бурляев Д.В. *(7+ лет опыта в R&D нутрицевтиков «Nuversys» и фармацевтике «Биннофарм Групп» → Аналитик данных)*  
 🌐 **Живой интерактивный дашборд (доступен в браузере):** **[https://nutrametrics-analytics.streamlit.app/](https://nutrametrics-analytics.streamlit.app/)**
 
 **NutraMetrics** — это End-to-End аналитический продукт на живых данных аптечного рынка РФ (**897 пероральных препаратов** в 9 категориях с кросс-агрегаторным покрытием `Uteka.ru`, `Apteka.ru`, `Zdravcity.ru`, `Eapteka.ru`, `Ригла`, `Планета Здоровья`), объединяющий **глубокую доменную экспертизу в R&D нутрицевтиков и фармацевтике** с **коммерческой и продуктовой аналитикой данных**.
